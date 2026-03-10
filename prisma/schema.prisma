@@ -1,0 +1,47 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  password  String
+  createdAt DateTime @default(now())
+  albums    Album[]
+}
+
+model Album {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String   @default("My life album")
+  createdAt DateTime @default(now())
+  moments  Moment[]
+}
+
+model Moment {
+  id          String       @id @default(cuid())
+  albumId     String
+  album       Album        @relation(fields: [albumId], references: [id], onDelete: Cascade)
+  photoPath   String?      // legacy single photo; use photos[] when present
+  audioPath   String?
+  transcript  String?
+  vignette    String?
+  recordedAt  DateTime    @default(now())  // date (and time) of the moment
+  createdAt   DateTime    @default(now())
+  photos      MomentPhoto[]
+}
+
+model MomentPhoto {
+  id        String  @id @default(cuid())
+  momentId  String
+  moment    Moment  @relation(fields: [momentId], references: [id], onDelete: Cascade)
+  photoPath String
+  sortOrder Int     @default(0)
+}
