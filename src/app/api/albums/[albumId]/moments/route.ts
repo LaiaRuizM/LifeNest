@@ -82,7 +82,8 @@ export async function POST(request: Request, { params }: Params) {
       return NextResponse.json({ error: 'At least one photo is required' }, { status: 400 });
     }
 
-    const recordedAt = new Date();
+    const recordedAtRaw = formData.get('recordedAt') as string | null;
+    const recordedAt = recordedAtRaw ? new Date(recordedAtRaw) : new Date();
     const photoPaths: string[] = [];
     for (const photo of photos) {
       photoPaths.push(await saveUpload(photo, 'photos'));

@@ -4,6 +4,7 @@ import { signIn } from 'next-auth/react';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { LoginSchema } from '@/lib/schemas';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -14,8 +15,17 @@ export default function LoginPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
     setError(null);
+
+    // Validate on the client — catches obvious mistakes before the network round-trip
+    const result = LoginSchema.safeParse({ email, password });
+    if (!result.success) {
+      const errs = result.error.flatten().fieldErrors;
+      setError(errs.email?.[0] ?? errs.password?.[0] ?? 'Invalid input');
+      return;
+    }
+
+    setLoading(true);
 
     const res = await signIn('credentials', {
       email,

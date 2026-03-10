@@ -1,9 +1,14 @@
 'use client';
 
 import { useSession } from 'next-auth/react';
-import { useState, useEffect, useCallback } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { format } from 'date-fns';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import {
+  renameAlbum as renameAlbumAction,
+  deleteAlbum as deleteAlbumAction,
+} from '@/lib/actions/album';
 
 type Album = {
   id: string;
@@ -12,78 +17,135 @@ type Album = {
   _count: { moments: number };
 };
 
+async function fetchAlbums(): Promise<Album[]> {
+  const res = await fetch('/api/albums');
+  if (!res.ok) throw new Error('Failed to load albums');
+  return res.json() as Promise<Album[]>;
+}
+
+async function createAlbumRequest(name: string): Promise<Album> {
+  const res = await fetch('/api/albums', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name }),
+  });
+  if (!res.ok) {
+    const err = (await res.json()) as { error?: string };
+    throw new Error(err.error ?? 'Failed to create album');
+  }
+  return res.json() as Promise<Album>;
+}
+
 export default function DashboardPage() {
   const { data: session } = useSession();
   const router = useRouter();
-  const [albums, setAlbums] = useState<Album[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+
+  // Pure UI state — not server state, so useState is correct here
   const [newAlbumName, setNewAlbumName] = useState('');
-  const [creating, setCreating] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
-  const [error, setError] = useState<string | null>(null);
 
-  const loadAlbums = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await fetch('/api/albums');
-      if (!res.ok) throw new Error('Failed to load');
-      setAlbums(await res.json());
-    } catch {
-      setError('Failed to load albums');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  // ── Fetch ──────────────────────────────────────────────────────────────────
+  const { data: albums = [], isLoading, error: fetchError } = useQuery({
+    queryKey: ['albums'],
+    queryFn: fetchAlbums,
+  });
 
-  useEffect(() => {
-    loadAlbums();
-  }, [loadAlbums]);
-
-  const createAlbum = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setCreating(true);
-    setError(null);
-    try {
-      const res = await fetch('/api/albums', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newAlbumName || 'My life album' }),
-      });
-      if (!res.ok) throw new Error('Failed to create');
-      const album = await res.json();
+  // ── Create (optimistic) ────────────────────────────────────────────────────
+  // The placeholder album appears immediately; if the request fails it rolls back.
+  const createMutation = useMutation({
+    mutationFn: createAlbumRequest,
+    onMutate: async (name) => {
+      await queryClient.cancelQueries({ queryKey: ['albums'] });
+      const prev = queryClient.getQueryData<Album[]>(['albums']);
+      queryClient.setQueryData<Album[]>(['albums'], (old = []) => [
+        {
+          id: `temp-${Date.now()}`,
+          name: name || 'My life album',
+          createdAt: new Date().toISOString(),
+          _count: { moments: 0 },
+        },
+        ...old,
+      ]);
+      return { prev };
+    },
+    onError: (_err, _name, ctx) => {
+      queryClient.setQueryData(['albums'], ctx?.prev);
+    },
+    onSuccess: (album) => {
       setNewAlbumName('');
       router.push(`/albums/${album.id}`);
-    } catch {
-      setError('Failed to create album');
-      setCreating(false);
-    }
-  };
+    },
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: ['albums'] });
+    },
+  });
 
-  const renameAlbum = async (id: string) => {
-    if (!editName.trim()) return;
-    try {
-      await fetch(`/api/albums/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: editName }),
-      });
-      setAlbums((prev) => prev.map((a) => (a.id === id ? { ...a, name: editName } : a)));
+  // ── Rename (Server Action + optimistic) ───────────────────────────────────
+  // Uses a Server Action — no separate API route needed for this simple mutation.
+  const renameMutation = useMutation({
+    mutationFn: ({ id, name }: { id: string; name: string }) =>
+      renameAlbumAction(id, name),
+    onMutate: async ({ id, name }) => {
+      await queryClient.cancelQueries({ queryKey: ['albums'] });
+      const prev = queryClient.getQueryData<Album[]>(['albums']);
+      queryClient.setQueryData<Album[]>(['albums'], (old = []) =>
+        old.map((a) => (a.id === id ? { ...a, name } : a))
+      );
+      return { prev };
+    },
+    onError: (_err, _vars, ctx) => {
+      queryClient.setQueryData(['albums'], ctx?.prev);
+    },
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: ['albums'] });
       setEditingId(null);
-    } catch {
-      setError('Failed to rename album');
-    }
+    },
+  });
+
+  // ── Delete (Server Action + optimistic) ───────────────────────────────────
+  // The album vanishes instantly; rolls back automatically on error.
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => deleteAlbumAction(id),
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: ['albums'] });
+      const prev = queryClient.getQueryData<Album[]>(['albums']);
+      queryClient.setQueryData<Album[]>(['albums'], (old = []) =>
+        old.filter((a) => a.id !== id)
+      );
+      return { prev };
+    },
+    onError: (_err, _id, ctx) => {
+      queryClient.setQueryData(['albums'], ctx?.prev);
+    },
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: ['albums'] });
+    },
+  });
+
+  // ── Handlers ───────────────────────────────────────────────────────────────
+  const handleCreate = (e: React.FormEvent) => {
+    e.preventDefault();
+    createMutation.mutate(newAlbumName || 'My life album');
   };
 
-  const deleteAlbum = async (id: string) => {
-    if (!confirm('Delete this album and all its moments? This cannot be undone.')) return;
-    try {
-      await fetch(`/api/albums/${id}`, { method: 'DELETE' });
-      setAlbums((prev) => prev.filter((a) => a.id !== id));
-    } catch {
-      setError('Failed to delete album');
-    }
+  const handleRename = (id: string) => {
+    if (!editName.trim()) return;
+    renameMutation.mutate({ id, name: editName });
   };
+
+  const handleDelete = (id: string) => {
+    if (!confirm('Delete this album and all its moments? This cannot be undone.')) return;
+    deleteMutation.mutate(id);
+  };
+
+  const mutationError =
+    (createMutation.error as Error | null)?.message ??
+    (renameMutation.error as Error | null)?.message ??
+    (deleteMutation.error as Error | null)?.message ??
+    (fetchError as Error | null)?.message ??
+    null;
 
   return (
     <>
@@ -95,7 +157,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Create album */}
-      <form onSubmit={createAlbum} className="flex gap-2 mb-8">
+      <form onSubmit={handleCreate} className="flex gap-2 mb-8">
         <input
           type="text"
           value={newAlbumName}
@@ -105,20 +167,20 @@ export default function DashboardPage() {
         />
         <button
           type="submit"
-          disabled={creating}
+          disabled={createMutation.isPending}
           className="px-4 py-2 bg-nest-700 text-white rounded-lg font-medium text-sm hover:bg-nest-800 disabled:opacity-50 disabled:pointer-events-none"
         >
-          {creating ? 'Creating…' : '+ New album'}
+          {createMutation.isPending ? 'Creating…' : '+ New album'}
         </button>
       </form>
 
-      {error && (
-        <p className="mb-4 text-sm text-red-600 bg-red-50 px-3 py-2 rounded">{error}</p>
+      {mutationError && (
+        <p className="mb-4 text-sm text-red-600 bg-red-50 px-3 py-2 rounded">{mutationError}</p>
       )}
 
-      {loading && <p className="text-sm text-nest-500">Loading albums…</p>}
+      {isLoading && <p className="text-sm text-nest-500">Loading albums…</p>}
 
-      {!loading && albums.length === 0 && (
+      {!isLoading && albums.length === 0 && (
         <div className="text-center py-20 text-nest-400">
           <p className="font-serif text-xl mb-2">No albums yet</p>
           <p className="text-sm">Create your first album above to start collecting moments.</p>
@@ -136,15 +198,16 @@ export default function DashboardPage() {
                 <input
                   value={editName}
                   onChange={(e) => setEditName(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && renameAlbum(album.id)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleRename(album.id)}
                   autoFocus
                   className="flex-1 border border-nest-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-nest-300"
                 />
                 <button
-                  onClick={() => renameAlbum(album.id)}
-                  className="text-xs text-nest-700 font-medium hover:text-nest-900"
+                  onClick={() => handleRename(album.id)}
+                  disabled={renameMutation.isPending}
+                  className="text-xs text-nest-700 font-medium hover:text-nest-900 disabled:opacity-50"
                 >
-                  Save
+                  {renameMutation.isPending ? 'Saving…' : 'Save'}
                 </button>
                 <button
                   onClick={() => setEditingId(null)}
@@ -181,8 +244,9 @@ export default function DashboardPage() {
                   Rename
                 </button>
                 <button
-                  onClick={() => deleteAlbum(album.id)}
-                  className="text-xs text-red-400 hover:text-red-600 transition-colors"
+                  onClick={() => handleDelete(album.id)}
+                  disabled={deleteMutation.isPending}
+                  className="text-xs text-red-400 hover:text-red-600 transition-colors disabled:opacity-50"
                 >
                   Delete
                 </button>

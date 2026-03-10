@@ -1,72 +1,87 @@
 'use client';
 
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import { format } from 'date-fns';
 import Image from 'next/image';
 import Link from 'next/link';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { deleteMoment as deleteMomentAction } from '@/lib/actions/album';
 
 type Moment = {
   id: string;
   photos: string[];
+  photoPath?: string | null;
   audioPath: string | null;
   transcript: string | null;
   vignette: string | null;
   recordedAt: string;
 };
 
-type Album = {
-  id: string;
-  name: string;
-};
+type Album = { id: string; name: string };
 
 function getFirstPhoto(m: Moment): string | null {
-  return m.photos?.[0] ?? null;
+  return m.photos?.[0] ?? m.photoPath ?? null;
 }
 
 export default function AlbumPage() {
   const params = useParams();
   const albumId = params.albumId as string;
 
-  const [album, setAlbum] = useState<Album | null>(null);
-  const [moments, setMoments] = useState<Moment[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+
+  // ── Server state (React Query) ─────────────────────────────────────────
+  const { data: album } = useQuery<Album>({
+    queryKey: ['album', albumId],
+    queryFn: async () => {
+      const res = await fetch(`/api/albums/${albumId}`);
+      if (!res.ok) throw new Error('Album not found');
+      return res.json() as Promise<Album>;
+    },
+  });
+
+  const {
+    data: moments = [],
+    isLoading: momentsLoading,
+    refetch: refetchMoments,
+  } = useQuery<Moment[]>({
+    queryKey: ['moments', albumId],
+    queryFn: async () => {
+      const res = await fetch(`/api/albums/${albumId}/moments`);
+      if (!res.ok) throw new Error('Failed to load moments');
+      return res.json() as Promise<Moment[]>;
+    },
+  });
+
+  // ── Add form state ───────────────────────────────────────────────────────
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [audioFile, setAudioFile] = useState<File | null>(null);
+  const [momentDate, setMomentDate] = useState<string>(
+    () => new Date().toISOString().slice(0, 10)
+  );
   const [isRecording, setIsRecording] = useState(false);
   const [recordingError, setRecordingError] = useState<string | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
+  const audioReadyResolveRef = useRef<((f: File) => void) | null>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
   const audioInputRef = useRef<HTMLInputElement>(null);
 
-  // Load album details
-  useEffect(() => {
-    fetch(`/api/albums/${albumId}`)
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => setAlbum(data));
-  }, [albumId]);
+  // ── Edit / delete state ──────────────────────────────────────────────────
+  // ── Pure UI state ──────────────────────────────────────────────────────
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editPhotoFile, setEditPhotoFile] = useState<File | null>(null);
+  const [editAudioFile, setEditAudioFile] = useState<File | null>(null);
+  const [editRemovePhoto, setEditRemovePhoto] = useState(false);
+  const [editRemoveAudio, setEditRemoveAudio] = useState(false);
+  const [editIsRecording, setEditIsRecording] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const editPhotoRef = useRef<HTMLInputElement>(null);
+  const editAudioRef = useRef<HTMLInputElement>(null);
+  const editMediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const editChunksRef = useRef<Blob[]>([]);
 
-  const loadMoments = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch(`/api/albums/${albumId}/moments`);
-      if (!res.ok) throw new Error('Failed to load');
-      setMoments(await res.json());
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Something went wrong');
-    } finally {
-      setLoading(false);
-    }
-  }, [albumId]);
-
-  useEffect(() => {
-    loadMoments();
-  }, [loadMoments]);
-
+  // ── Recording ────────────────────────────────────────────────────────────
   const startRecording = useCallback(async () => {
     setRecordingError(null);
     setAudioFile(null);
@@ -79,20 +94,20 @@ export default function AlbumPage() {
       const recorder = new MediaRecorder(stream);
       mediaRecorderRef.current = recorder;
       chunksRef.current = [];
-      recorder.ondataavailable = (e) => {
-        if (e.data.size) chunksRef.current.push(e.data);
-      };
+      recorder.ondataavailable = (e) => { if (e.data.size) chunksRef.current.push(e.data); };
       recorder.onstop = () => {
         stream.getTracks().forEach((t) => t.stop());
         const blob = new Blob(chunksRef.current, { type: mime });
-        setAudioFile(new File([blob], 'recording.webm', { type: blob.type }));
+        const file = new File([blob], 'recording.webm', { type: blob.type });
+        setAudioFile(file);
+        // Resolve the promise if submit triggered the stop
+        audioReadyResolveRef.current?.(file);
+        audioReadyResolveRef.current = null;
       };
       recorder.start(200);
       setIsRecording(true);
     } catch (err) {
-      setRecordingError(
-        err instanceof Error ? err.message : 'Microphone access denied'
-      );
+      setRecordingError(err instanceof Error ? err.message : 'Microphone access denied');
     }
   }, []);
 
@@ -111,39 +126,183 @@ export default function AlbumPage() {
     if (audioInputRef.current) audioInputRef.current.value = '';
   }, []);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!photoFile) return;
-    setUploading(true);
-    setError(null);
-    try {
-      const form = new FormData();
-      form.append('photo', photoFile);
-      if (audioFile) form.append('audio', audioFile);
+  // ── Mutations ─────────────────────────────────────────────────────────────
+
+  // Add moment — can't be fully optimistic (needs server-assigned ID + AI transcript)
+  const addMutation = useMutation({
+    mutationFn: async (form: FormData) => {
       const res = await fetch(`/api/albums/${albumId}/moments`, {
         method: 'POST',
         body: form,
       });
       if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || 'Upload failed');
+        const err = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(err.error ?? 'Upload failed');
       }
-      const newMoment = await res.json();
-      setMoments((prev) => [newMoment, ...prev]);
+      return res.json() as Promise<Moment>;
+    },
+    onSuccess: (newMoment) => {
+      // Prepend the new moment without a full refetch
+      queryClient.setQueryData<Moment[]>(['moments', albumId], (old = []) => [
+        newMoment,
+        ...old,
+      ]);
       setPhotoFile(null);
       setAudioFile(null);
+      setMomentDate(new Date().toISOString().slice(0, 10));
       if (photoInputRef.current) photoInputRef.current.value = '';
       if (audioInputRef.current) audioInputRef.current.value = '';
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Something went wrong');
-    } finally {
-      setUploading(false);
+    },
+  });
+
+  // Delete moment (Server Action + optimistic — disappears instantly, rolls back on error)
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => deleteMomentAction(id),
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: ['moments', albumId] });
+      const prev = queryClient.getQueryData<Moment[]>(['moments', albumId]);
+      queryClient.setQueryData<Moment[]>(['moments', albumId], (old = []) =>
+        old.filter((m) => m.id !== id)
+      );
+      setConfirmDeleteId(null);
+      return { prev };
+    },
+    onError: (_err, _id, ctx) => {
+      queryClient.setQueryData(['moments', albumId], ctx?.prev);
+    },
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: ['moments', albumId] });
+    },
+  });
+
+  // Update moment
+  const updateMutation = useMutation({
+    mutationFn: async ({ id, form }: { id: string; form: FormData }) => {
+      const res = await fetch(`/api/moments/${id}`, { method: 'PATCH', body: form });
+      if (!res.ok) {
+        const err = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(err.error ?? 'Update failed');
+      }
+      return res.json() as Promise<Moment>;
+    },
+    onSuccess: (updated) => {
+      queryClient.setQueryData<Moment[]>(['moments', albumId], (old = []) =>
+        old.map((m) => (m.id === updated.id ? updated : m))
+      );
+      cancelEdit();
+    },
+  });
+
+  const pageError =
+    (addMutation.error as Error | null)?.message ??
+    (deleteMutation.error as Error | null)?.message ??
+    (updateMutation.error as Error | null)?.message ??
+    null;
+
+  // ── Submit — auto-stops recording if still active ────────────────────────
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!photoFile) return;
+
+    // If still recording, stop it and wait for the blob before uploading
+    let resolvedAudio = audioFile;
+    if (isRecording) {
+      const recorder = mediaRecorderRef.current;
+      if (recorder && recorder.state !== 'inactive') {
+        resolvedAudio = await new Promise<File>((resolve) => {
+          audioReadyResolveRef.current = resolve;
+          recorder.stop();
+        });
+        mediaRecorderRef.current = null;
+      }
+      setIsRecording(false);
     }
+
+    const form = new FormData();
+    form.append('photo', photoFile);
+    if (resolvedAudio) form.append('audio', resolvedAudio);
+    form.append('recordedAt', momentDate);
+    addMutation.mutate(form);
   };
 
+  // ── Edit helpers ──────────────────────────────────────────────────────────
+  const cancelEdit = useCallback(() => {
+    setEditingId(null);
+    setEditPhotoFile(null);
+    setEditAudioFile(null);
+    setEditRemovePhoto(false);
+    setEditRemoveAudio(false);
+    setEditIsRecording(false);
+    if (editPhotoRef.current) editPhotoRef.current.value = '';
+    if (editAudioRef.current) editAudioRef.current.value = '';
+  }, []);
+
+  const openEdit = useCallback((id: string) => {
+    setEditingId(id);
+    setEditPhotoFile(null);
+    setEditAudioFile(null);
+    setEditRemovePhoto(false);
+    setEditRemoveAudio(false);
+    setConfirmDeleteId(null);
+    if (editPhotoRef.current) editPhotoRef.current.value = '';
+    if (editAudioRef.current) editAudioRef.current.value = '';
+  }, []);
+
+  const startEditRecording = useCallback(async () => {
+    setEditAudioFile(null);
+    if (editAudioRef.current) editAudioRef.current.value = '';
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mime = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+        ? 'audio/webm;codecs=opus'
+        : 'audio/webm';
+      const recorder = new MediaRecorder(stream);
+      editMediaRecorderRef.current = recorder;
+      editChunksRef.current = [];
+      recorder.ondataavailable = (e) => { if (e.data.size) editChunksRef.current.push(e.data); };
+      recorder.onstop = () => {
+        stream.getTracks().forEach((t) => t.stop());
+        const blob = new Blob(editChunksRef.current, { type: mime });
+        setEditAudioFile(new File([blob], 'recording.webm', { type: blob.type }));
+      };
+      recorder.start(200);
+      setEditIsRecording(true);
+    } catch { /* ignore mic errors */ }
+  }, []);
+
+  const stopEditRecording = useCallback(() => {
+    const recorder = editMediaRecorderRef.current;
+    if (recorder && recorder.state !== 'inactive') {
+      recorder.stop();
+      editMediaRecorderRef.current = null;
+    }
+    setEditIsRecording(false);
+  }, []);
+
+  // ── Delete ────────────────────────────────────────────────────────────────
+  const handleDelete = useCallback((id: string) => {
+    deleteMutation.mutate(id);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ── Update ────────────────────────────────────────────────────────────────
+  const handleUpdate = (id: string) => {
+    if (!editPhotoFile && !editAudioFile && !editRemovePhoto && !editRemoveAudio) {
+      cancelEdit();
+      return;
+    }
+    const form = new FormData();
+    if (editPhotoFile) form.append('photo', editPhotoFile);
+    if (editAudioFile) form.append('audio', editAudioFile);
+    if (editRemovePhoto) form.append('removePhoto', 'true');
+    if (editRemoveAudio) form.append('removeAudio', 'true');
+    updateMutation.mutate({ id, form });
+  };
+
+  // ────────────────────────────────────────────────────────────────────────
   return (
     <>
-      {/* Breadcrumb + album header */}
+      {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div className="flex items-center gap-2 min-w-0">
           <Link
@@ -167,10 +326,12 @@ export default function AlbumPage() {
         </a>
       </div>
 
-      {/* Add moment */}
+      {/* ── Add moment form ──────────────────────────────────────────────── */}
       <section className="mb-10">
         <h2 className="font-serif text-lg font-medium text-nest-800 mb-4">Add a moment</h2>
         <form onSubmit={handleSubmit} className="space-y-4">
+
+          {/* Photo */}
           <div>
             <label className="block text-sm font-medium text-nest-700 mb-1">Photo *</label>
             <input
@@ -182,9 +343,25 @@ export default function AlbumPage() {
             />
           </div>
 
+          {/* Date picker */}
+          <div>
+            <label className="block text-sm font-medium text-nest-700 mb-1">Date</label>
+            <input
+              type="date"
+              value={momentDate}
+              max={new Date().toISOString().slice(0, 10)}
+              onChange={(e) => setMomentDate(e.target.value)}
+              className="block text-sm text-nest-700 border border-nest-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-nest-400 bg-white"
+            />
+            <p className="mt-1 text-xs text-nest-400">
+              Pick any past or present date — perfect for filling in old memories.
+            </p>
+          </div>
+
+          {/* Voice note */}
           <div>
             <label className="block text-sm font-medium text-nest-700 mb-1">
-              Voice note (optional)
+              Voice note <span className="font-normal text-nest-400">(optional)</span>
             </label>
             <p className="mb-2 text-xs text-nest-500">
               Upload a file or record now. Any language works — we'll transcribe it and turn it
@@ -230,44 +407,50 @@ export default function AlbumPage() {
                 </button>
               )}
             </div>
+            {isRecording && (
+              <p className="mt-1.5 text-xs text-amber-600">
+                🎙 Recording in progress — clicking &quot;Add moment&quot; will automatically stop
+                and save it.
+              </p>
+            )}
             {recordingError && (
               <p className="mt-1 text-xs text-red-600">{recordingError}</p>
             )}
           </div>
 
-          {error && (
-            <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded">{error}</p>
+          {pageError && (
+            <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded">{pageError}</p>
           )}
 
           <button
             type="submit"
-            disabled={uploading || !photoFile}
+            disabled={addMutation.isPending || !photoFile}
             className="px-4 py-2.5 bg-nest-700 text-white rounded-lg font-medium text-sm hover:bg-nest-800 disabled:opacity-50 disabled:pointer-events-none"
           >
-            {uploading
-              ? audioFile
-                ? 'Transcribing & saving…'
-                : 'Saving…'
-              : 'Add moment'}
+            {addMutation.isPending
+              ? (audioFile || isRecording ? 'Transcribing & saving…' : 'Saving…')
+              : isRecording
+                ? '⏹ Stop & add moment'
+                : 'Add moment'}
           </button>
         </form>
       </section>
 
-      {/* Moments list */}
+      {/* ── Moments list ────────────────────────────────────────────────── */}
       <section>
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-serif text-lg font-medium text-nest-800">Moments</h2>
           <button
             type="button"
-            onClick={loadMoments}
-            disabled={loading}
+            onClick={() => void refetchMoments()}
+            disabled={momentsLoading}
             className="text-sm text-nest-600 hover:text-nest-800 disabled:opacity-50"
           >
-            {loading ? 'Loading…' : 'Refresh'}
+            {momentsLoading ? 'Loading…' : 'Refresh'}
           </button>
         </div>
 
-        {moments.length === 0 && !loading && (
+        {moments.length === 0 && !momentsLoading && (
           <p className="text-nest-500 text-sm py-8 text-center">
             No moments yet. Add a photo above to get started.
           </p>
@@ -317,7 +500,188 @@ export default function AlbumPage() {
                       Voice note recorded — transcription unavailable.
                     </p>
                   )}
+
+                  {/* Edit / Delete toolbar */}
+                  <div className="mt-4 flex items-center gap-3 pt-3 border-t border-nest-100">
+                    <button
+                      type="button"
+                      onClick={() => openEdit(m.id)}
+                      className="text-xs text-nest-500 hover:text-nest-700 font-medium"
+                    >
+                      Edit
+                    </button>
+                    {confirmDeleteId === m.id ? (
+                      <span className="flex items-center gap-2 ml-auto">
+                        <span className="text-xs text-nest-500">Delete this moment?</span>
+                        <button
+                          type="button"
+                          disabled={deleteMutation.isPending && deleteMutation.variables === m.id}
+                          onClick={() => handleDelete(m.id)}
+                          className="text-xs text-red-600 font-semibold hover:text-red-700 disabled:opacity-50"
+                        >
+                          {deleteMutation.isPending && deleteMutation.variables === m.id
+                            ? 'Deleting…'
+                            : 'Yes, delete'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setConfirmDeleteId(null)}
+                          className="text-xs text-nest-400 hover:text-nest-600"
+                        >
+                          Cancel
+                        </button>
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => { setConfirmDeleteId(m.id); setEditingId(null); }}
+                        className="text-xs text-nest-400 hover:text-red-500 ml-auto"
+                      >
+                        Delete
+                      </button>
+                    )}
+                  </div>
                 </div>
+
+                {/* ── Inline edit panel ──────────────────────────────────── */}
+                {editingId === m.id && (
+                  <div className="border-t border-nest-100 bg-nest-50/40 p-4 space-y-4">
+                    <p className="text-xs font-semibold text-nest-700 uppercase tracking-wide">
+                      Edit moment
+                    </p>
+
+                    {/* Edit photo */}
+                    <div>
+                      <p className="text-xs font-medium text-nest-700 mb-1.5">Photo</p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        {!editRemovePhoto ? (
+                          <>
+                            <input
+                              ref={editPhotoRef}
+                              type="file"
+                              accept="image/*"
+                              onChange={(e) => {
+                                setEditRemovePhoto(false);
+                                setEditPhotoFile(e.target.files?.[0] ?? null);
+                              }}
+                              className="block text-xs text-nest-600 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:bg-nest-100 file:text-nest-800 file:text-xs"
+                            />
+                            {(m.photos.length > 0 || m.photoPath) && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditRemovePhoto(true);
+                                  setEditPhotoFile(null);
+                                  if (editPhotoRef.current) editPhotoRef.current.value = '';
+                                }}
+                                className="text-xs text-red-400 hover:text-red-600"
+                              >
+                                Remove photo
+                              </button>
+                            )}
+                          </>
+                        ) : (
+                          <>
+                            <span className="text-xs text-red-500">Photo will be removed</span>
+                            <button
+                              type="button"
+                              onClick={() => setEditRemovePhoto(false)}
+                              className="text-xs text-nest-500 hover:text-nest-700"
+                            >
+                              Undo
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Edit audio */}
+                    <div>
+                      <p className="text-xs font-medium text-nest-700 mb-1.5">Voice note</p>
+                      {!editRemoveAudio ? (
+                        <div className="flex flex-wrap items-center gap-2">
+                          <input
+                            ref={editAudioRef}
+                            type="file"
+                            accept="audio/*"
+                            disabled={editIsRecording}
+                            onChange={(e) => setEditAudioFile(e.target.files?.[0] ?? null)}
+                            className="block text-xs text-nest-600 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:bg-nest-100 file:text-nest-800 file:text-xs disabled:opacity-50"
+                          />
+                          {!editIsRecording ? (
+                            <button
+                              type="button"
+                              onClick={startEditRecording}
+                              className="px-2.5 py-1.5 rounded border border-nest-300 text-nest-700 text-xs font-medium hover:bg-nest-100"
+                            >
+                              Record
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={stopEditRecording}
+                              className="px-2.5 py-1.5 rounded bg-red-100 text-red-800 text-xs font-medium flex items-center gap-1.5"
+                            >
+                              <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                              Stop
+                            </button>
+                          )}
+                          {m.audioPath && !editAudioFile && !editIsRecording && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditRemoveAudio(true);
+                                setEditAudioFile(null);
+                                if (editAudioRef.current) editAudioRef.current.value = '';
+                              }}
+                              className="text-xs text-red-400 hover:text-red-600"
+                            >
+                              Remove audio
+                            </button>
+                          )}
+                          {editAudioFile && !editIsRecording && (
+                            <span className="text-xs text-green-600">✓ New audio ready</span>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-red-500">Voice note will be removed</span>
+                          <button
+                            type="button"
+                            onClick={() => setEditRemoveAudio(false)}
+                            className="text-xs text-nest-500 hover:text-nest-700"
+                          >
+                            Undo
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Save / Cancel */}
+                    <div className="flex items-center gap-2 pt-1">
+                      <button
+                        type="button"
+                        disabled={updateMutation.isPending}
+                        onClick={() => handleUpdate(m.id)}
+                        className="px-3 py-1.5 bg-nest-700 text-white rounded text-xs font-medium hover:bg-nest-800 disabled:opacity-50 disabled:pointer-events-none"
+                      >
+                        {updateMutation.isPending
+                          ? editAudioFile
+                            ? 'Transcribing…'
+                            : 'Saving…'
+                          : 'Save changes'}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={updateMutation.isPending}
+                        onClick={cancelEdit}
+                        className="text-xs text-nest-500 hover:text-nest-700 disabled:opacity-50"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
               </li>
             );
           })}

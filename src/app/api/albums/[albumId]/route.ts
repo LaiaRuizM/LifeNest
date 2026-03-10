@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { RenameAlbumSchema } from '@/lib/schemas';
 
 type Params = { params: { albumId: string } };
 
@@ -26,14 +27,16 @@ export async function PATCH(request: Request, { params }: Params) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const { name } = await request.json();
-  if (!name?.trim()) {
-    return NextResponse.json({ error: 'Name is required' }, { status: 400 });
+  const body = await request.json();
+  const parsed = RenameAlbumSchema.safeParse(body);
+  if (!parsed.success) {
+    const msg = parsed.error.flatten().fieldErrors.name?.[0] ?? 'Invalid name';
+    return NextResponse.json({ error: msg }, { status: 400 });
   }
 
   const result = await prisma.album.updateMany({
     where: { id: params.albumId, userId: session.user.id },
-    data: { name: name.trim() },
+    data: { name: parsed.data.name },
   });
 
   if (result.count === 0) return NextResponse.json({ error: 'Not found' }, { status: 404 });

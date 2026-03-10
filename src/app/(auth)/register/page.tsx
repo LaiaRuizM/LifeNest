@@ -4,6 +4,7 @@ import { signIn } from 'next-auth/react';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { RegisterSchema } from '@/lib/schemas';
 
 export default function RegisterPage() {
   const [name, setName] = useState('');
@@ -15,8 +16,17 @@ export default function RegisterPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
     setError(null);
+
+    // Client-side validation with the exact same schema the API route uses
+    const result = RegisterSchema.safeParse({ email, password, name: name || undefined });
+    if (!result.success) {
+      const errs = result.error.flatten().fieldErrors;
+      setError(errs.email?.[0] ?? errs.password?.[0] ?? 'Invalid input');
+      return;
+    }
+
+    setLoading(true);
 
     const res = await fetch('/api/register', {
       method: 'POST',

@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { DM_Sans, Literata } from 'next/font/google';
 import { Providers } from '@/components/providers';
+import '@/lib/env'; // Validates all required env vars at startup — fails loudly if any are missing
 import './globals.css';
 
 const dmSans = DM_Sans({
