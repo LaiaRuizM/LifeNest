@@ -3,19 +3,64 @@
 @tailwind utilities;
 
 :root {
-  --background: #faf8f5;
+  --background: #f5f0e6;
   --foreground: #2e251c;
   --nest-warm: #d9cfb8;
   --nest-deep: #564636;
 }
 
+/* Soft Memory Album Style — warm paper texture */
 body {
-  color: var(--foreground);
-  background: var(--background);
+  color: #5a4a42;
+  background:
+    url('https://www.transparenttextures.com/patterns/paper-fibers.png'),
+    #fdf6f0;
+  background-blend-mode: multiply;
+  background-repeat: repeat;
+  background-size: auto;
+}
+
+/* Floral corner overlays */
+body::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background:
+    url('/floral-top-left.png') top left / 260px auto no-repeat,
+    url('/floral-bottom-right.png') bottom right / 260px auto no-repeat;
+  mix-blend-mode: multiply;
+  pointer-events: none;
+  opacity: 0.18;
+  z-index: -1;
 }
 
 @layer utilities {
   .text-balance {
     text-wrap: balance;
+  }
+
+  .font-cursive {
+    font-family: var(--font-cursive), cursive;
+  }
+}
+
+/* Print styles — keepsake-friendly */
+@media print {
+  header,
+  .no-print {
+    display: none !important;
+  }
+
+  body {
+    background: #fff;
+    background-image: none;
+  }
+
+  .print-card {
+    box-shadow: none !important;
+    border: 1px solid #e8ddd0 !important;
   }
 }

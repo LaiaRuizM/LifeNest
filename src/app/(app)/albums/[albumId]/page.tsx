@@ -24,6 +24,46 @@ function getFirstPhoto(m: Moment): string | null {
   return m.photos?.[0] ?? m.photoPath ?? null;
 }
 
+// ── Decorative botanical corner (baby's breath / wildflower style) ────────
+function BotanicalCorner() {
+  return (
+    <svg viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      {/* Main arching stems */}
+      <path d="M 0 200 Q 25 155 55 125 Q 85 95 115 68 Q 145 42 175 18 Q 188 8 200 0"
+        stroke="#c4b392" strokeWidth="1.5" strokeLinecap="round" />
+      <path d="M 0 158 Q 28 128 58 102 Q 88 76 118 52 Q 146 30 168 12"
+        stroke="#b39b72" strokeWidth="1.2" strokeLinecap="round" />
+      <path d="M 0 115 Q 22 96 48 75 Q 72 56 95 40"
+        stroke="#c4b392" strokeWidth="1" strokeLinecap="round" />
+      {/* Side branches */}
+      <path d="M 55 125 Q 38 106 24 90" stroke="#c4b392" strokeWidth="1" strokeLinecap="round" />
+      <path d="M 115 68 Q 98 50 84 36" stroke="#b39b72" strokeWidth="0.9" strokeLinecap="round" />
+      <path d="M 145 42 Q 130 28 118 16" stroke="#c4b392" strokeWidth="0.9" strokeLinecap="round" />
+      {/* Soft elliptical leaves */}
+      <ellipse cx="40" cy="113" rx="13" ry="4.5" fill="#c4b392" opacity="0.5" transform="rotate(-46, 40, 113)" />
+      <ellipse cx="68" cy="86" rx="11" ry="4" fill="#b39b72" opacity="0.45" transform="rotate(-36, 68, 86)" />
+      <ellipse cx="96" cy="62" rx="12" ry="4.5" fill="#c4b392" opacity="0.48" transform="rotate(-52, 96, 62)" />
+      <ellipse cx="128" cy="38" rx="10" ry="4" fill="#b39b72" opacity="0.42" transform="rotate(-42, 128, 38)" />
+      {/* Tiny clustered flowers (baby's breath style) */}
+      <circle cx="198" cy="2" r="3.5" fill="#ede6d8" opacity="0.65" />
+      <circle cx="191" cy="9" r="2.8" fill="#e4dac8" opacity="0.6" />
+      <circle cx="183" cy="14" r="2.2" fill="#ede6d8" opacity="0.55" />
+      <circle cx="193" cy="16" r="2" fill="#ddd0be" opacity="0.55" />
+      <circle cx="168" cy="12" r="2.5" fill="#ede6d8" opacity="0.58" />
+      <circle cx="162" cy="20" r="2" fill="#e4dac8" opacity="0.52" />
+      <circle cx="174" cy="22" r="1.8" fill="#ddd0be" opacity="0.5" />
+      <circle cx="115" cy="68" r="3" fill="#ede6d8" opacity="0.6" />
+      <circle cx="108" cy="76" r="2.2" fill="#e4dac8" opacity="0.52" />
+      <circle cx="122" cy="75" r="1.8" fill="#ddd0be" opacity="0.48" />
+      <circle cx="24" cy="90" r="2.5" fill="#ede6d8" opacity="0.52" />
+      <circle cx="17" cy="98" r="2" fill="#e4dac8" opacity="0.45" />
+      <circle cx="84" cy="36" r="2" fill="#ede6d8" opacity="0.45" />
+      <circle cx="118" cy="16" r="1.8" fill="#e4dac8" opacity="0.42" />
+      <circle cx="48" cy="75" r="1.5" fill="#c4b392" opacity="0.38" />
+    </svg>
+  );
+}
+
 export default function AlbumPage() {
   const params = useParams();
   const albumId = params.albumId as string;
@@ -302,8 +342,24 @@ export default function AlbumPage() {
   // ────────────────────────────────────────────────────────────────────────
   return (
     <>
-      {/* Header */}
-      <div className="flex items-center justify-between mb-8">
+      {/* Botanical corner decorations — fixed to viewport */}
+      <div
+        className="pointer-events-none fixed top-0 left-0 w-56 h-56 opacity-30 select-none"
+        style={{ zIndex: 0 }}
+        aria-hidden="true"
+      >
+        <BotanicalCorner />
+      </div>
+      <div
+        className="pointer-events-none fixed bottom-0 right-0 w-56 h-56 opacity-30 select-none rotate-180"
+        style={{ zIndex: 0 }}
+        aria-hidden="true"
+      >
+        <BotanicalCorner />
+      </div>
+
+      {/* Breadcrumb + Export PDF */}
+      <div className="relative flex items-center justify-between mb-8">
         <div className="flex items-center gap-2 min-w-0">
           <Link
             href="/dashboard"
@@ -311,8 +367,8 @@ export default function AlbumPage() {
           >
             ← Albums
           </Link>
-          <span className="text-nest-200 shrink-0">/</span>
-          <h1 className="font-serif text-xl font-medium text-nest-800 truncate">
+          <span className="text-nest-300 shrink-0">/</span>
+          <h1 className="font-serif text-lg font-medium text-nest-700 truncate">
             {album?.name ?? '…'}
           </h1>
         </div>
@@ -320,140 +376,192 @@ export default function AlbumPage() {
           href={`/api/export/pdf?albumId=${albumId}`}
           target="_blank"
           rel="noopener noreferrer"
-          className="text-sm text-nest-600 hover:text-nest-800 underline underline-offset-2 shrink-0 ml-4"
+          className="text-sm text-nest-500 hover:text-nest-700 underline underline-offset-2 shrink-0 ml-4 transition-colors no-print"
         >
           Export PDF
         </a>
       </div>
 
-      {/* ── Add moment form ──────────────────────────────────────────────── */}
-      <section className="mb-10">
-        <h2 className="font-serif text-lg font-medium text-nest-800 mb-4">Add a moment</h2>
-        <form onSubmit={handleSubmit} className="space-y-4">
+      {/* ── Add a moment ─────────────────────────────────────────────────── */}
+      <section className="mb-14 relative">
+        {/* Cursive heading with gradient decorative rules */}
+        <div className="flex items-center justify-center gap-4 mb-8">
+          <div className="flex-1 h-px bg-gradient-to-r from-transparent to-nest-300" />
+          <h2 className="font-cursive text-[2.1rem] md:text-[2.6rem] text-nest-800 px-3 leading-tight whitespace-nowrap">
+            Add a moment
+          </h2>
+          <div className="flex-1 h-px bg-gradient-to-l from-transparent to-nest-300" />
+        </div>
 
-          {/* Photo */}
-          <div>
-            <label className="block text-sm font-medium text-nest-700 mb-1">Photo *</label>
-            <input
-              ref={photoInputRef}
-              type="file"
-              accept="image/*"
-              onChange={(e) => setPhotoFile(e.target.files?.[0] ?? null)}
-              className="block w-full text-sm text-nest-600 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:bg-nest-100 file:text-nest-800 file:font-medium"
-            />
-          </div>
+        {/* Paper-like form card */}
+        <div className="max-w-[600px] mx-auto bg-[rgba(255,255,255,0.82)] rounded-2xl border border-[#e2d8c8] shadow-[0_4px_12px_rgba(0,0,0,0.10)] p-6 md:p-8 print-card">
+          <form onSubmit={handleSubmit}>
 
-          {/* Date picker */}
-          <div>
-            <label className="block text-sm font-medium text-nest-700 mb-1">Date</label>
-            <input
-              type="date"
-              value={momentDate}
-              max={new Date().toISOString().slice(0, 10)}
-              onChange={(e) => setMomentDate(e.target.value)}
-              className="block text-sm text-nest-700 border border-nest-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-nest-400 bg-white"
-            />
-            <p className="mt-1 text-xs text-nest-400">
-              Pick any past or present date — perfect for filling in old memories.
-            </p>
-          </div>
+            {/* ── Photo ── */}
+            <div className="pb-6 mb-6 border-b border-[#ece4d8]">
+              <p className="text-sm font-normal text-[#5a4a42] mb-3">
+                Photo
+              </p>
+              <div className="flex flex-wrap items-center gap-3">
+                <input
+                  ref={photoInputRef}
+                  id="photo-upload"
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => setPhotoFile(e.target.files?.[0] ?? null)}
+                  className="sr-only"
+                />
+                <label
+                  htmlFor="photo-upload"
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-nest-700 text-white text-sm rounded-full cursor-pointer shadow-sm hover:bg-nest-800 active:scale-95 transition-all select-none"
+                >
+                  📷 Upload Photo
+                </label>
+                <span className="text-sm text-nest-400 italic">
+                  {photoFile ? photoFile.name : 'No file chosen'}
+                </span>
+              </div>
+            </div>
 
-          {/* Voice note */}
-          <div>
-            <label className="block text-sm font-medium text-nest-700 mb-1">
-              Voice note <span className="font-normal text-nest-400">(optional)</span>
-            </label>
-            <p className="mb-2 text-xs text-nest-500">
-              Upload a file or record now. Any language works — we'll transcribe it and turn it
-              into a short vignette.
-            </p>
-            <div className="flex flex-wrap items-center gap-2">
+            {/* ── Date ── */}
+            <div className="pb-6 mb-6 border-b border-[#ece4d8]">
+              <p className="text-sm font-normal text-[#5a4a42] mb-3">
+                Date
+              </p>
               <input
-                ref={audioInputRef}
-                type="file"
-                accept="audio/*"
-                disabled={isRecording}
-                onChange={(e) => {
-                  setRecordingError(null);
-                  setAudioFile(e.target.files?.[0] ?? null);
-                }}
-                className="block text-sm text-nest-600 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:bg-nest-100 file:text-nest-800 file:font-medium disabled:opacity-50"
+                type="date"
+                value={momentDate}
+                max={new Date().toISOString().slice(0, 10)}
+                onChange={(e) => setMomentDate(e.target.value)}
+                className="text-sm text-nest-700 border border-[#d9cfb8] rounded-xl px-4 py-2.5 bg-white/80 shadow-sm focus:outline-none focus:ring-2 focus:ring-nest-300 focus:border-nest-400 transition-shadow"
               />
-              {!isRecording ? (
-                <button
-                  type="button"
-                  onClick={startRecording}
-                  className="px-3 py-2 rounded-lg border border-nest-300 text-nest-700 text-sm font-medium hover:bg-nest-100"
+              <p className="mt-2 text-xs text-nest-400">
+                Select any past or present date to capture a memory.
+              </p>
+            </div>
+
+            {/* ── Voice Note ── */}
+            <div className="mb-8">
+              <p className="text-sm font-normal text-[#5a4a42] mb-3">
+                Voice Note{' '}
+                <span className="text-[#8a7c74]">(Optional)</span>
+              </p>
+              <div className="flex flex-wrap items-center gap-3">
+                <input
+                  ref={audioInputRef}
+                  id="audio-upload"
+                  type="file"
+                  accept="audio/*"
+                  disabled={isRecording}
+                  onChange={(e) => {
+                    setRecordingError(null);
+                    setAudioFile(e.target.files?.[0] ?? null);
+                  }}
+                  className="sr-only"
+                />
+                <label
+                  htmlFor="audio-upload"
+                  className={`inline-flex items-center gap-2 px-4 py-2 bg-nest-700 text-white text-sm rounded-full cursor-pointer shadow-sm hover:bg-nest-800 active:scale-95 transition-all select-none${isRecording ? ' opacity-50 pointer-events-none' : ''}`}
                 >
-                  Record
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={stopRecording}
-                  className="px-3 py-2 rounded-lg bg-red-100 text-red-800 text-sm font-medium hover:bg-red-200 flex items-center gap-1.5"
-                >
-                  <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-                  Stop recording
-                </button>
+                  🎧 Upload Audio
+                </label>
+                <span className="text-sm text-nest-400 italic">
+                  {audioFile ? audioFile.name : 'No file chosen'}
+                </span>
+                {!isRecording ? (
+                  <button
+                    type="button"
+                    onClick={startRecording}
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-white/80 text-nest-700 text-sm rounded-full border border-[#d9cfb8] shadow-sm hover:bg-[#f5f0e6] active:scale-95 transition-all"
+                  >
+                    🎙 Record
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={stopRecording}
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-red-50 text-red-700 text-sm rounded-full border border-red-200 shadow-sm hover:bg-red-100 active:scale-95 transition-all"
+                  >
+                    <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                    Stop Recording
+                  </button>
+                )}
+                {audioFile && !isRecording && (
+                  <button
+                    type="button"
+                    onClick={clearAudio}
+                    className="text-sm text-nest-400 hover:text-nest-600 transition-colors"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+              <p className="mt-2 text-xs text-nest-400">
+                Upload a file or record a message — we&apos;ll transcribe it into a short story.
+              </p>
+              {isRecording && (
+                <p className="mt-2 text-xs text-amber-600 flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse inline-block" />
+                  Recording in progress — clicking &quot;Add Moment&quot; will automatically stop and save it.
+                </p>
               )}
-              {audioFile && !isRecording && (
-                <button
-                  type="button"
-                  onClick={clearAudio}
-                  className="text-sm text-nest-500 hover:text-nest-700"
-                >
-                  Clear
-                </button>
+              {recordingError && (
+                <p className="mt-1 text-xs text-red-500">{recordingError}</p>
               )}
             </div>
-            {isRecording && (
-              <p className="mt-1.5 text-xs text-amber-600">
-                🎙 Recording in progress — clicking &quot;Add moment&quot; will automatically stop
-                and save it.
+
+            {pageError && (
+              <p className="text-sm text-red-600 bg-red-50/80 px-4 py-2.5 rounded-xl mb-6 border border-red-100">
+                {pageError}
               </p>
             )}
-            {recordingError && (
-              <p className="mt-1 text-xs text-red-600">{recordingError}</p>
-            )}
-          </div>
 
-          {pageError && (
-            <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded">{pageError}</p>
-          )}
-
-          <button
-            type="submit"
-            disabled={addMutation.isPending || !photoFile}
-            className="px-4 py-2.5 bg-nest-700 text-white rounded-lg font-medium text-sm hover:bg-nest-800 disabled:opacity-50 disabled:pointer-events-none"
-          >
-            {addMutation.isPending
-              ? (audioFile || isRecording ? 'Transcribing & saving…' : 'Saving…')
-              : isRecording
-                ? '⏹ Stop & add moment'
-                : 'Add moment'}
-          </button>
-        </form>
+            {/* Submit */}
+            <div className="flex justify-center pt-2">
+              <button
+                type="submit"
+                disabled={addMutation.isPending || !photoFile}
+                className="px-8 py-3 bg-nest-700 text-white rounded-full font-medium text-sm shadow-md hover:bg-nest-800 hover:shadow-lg active:scale-95 disabled:opacity-50 disabled:pointer-events-none transition-all"
+              >
+                {addMutation.isPending
+                  ? (audioFile || isRecording ? 'Transcribing & saving…' : 'Saving…')
+                  : isRecording
+                    ? '⏹ Stop & Add Moment'
+                    : 'Add Moment'}
+              </button>
+            </div>
+          </form>
+        </div>
       </section>
 
-      {/* ── Moments list ────────────────────────────────────────────────── */}
+      {/* ── Recent Moments ───────────────────────────────────────────────── */}
       <section>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="font-serif text-lg font-medium text-nest-800">Moments</h2>
+        {/* Cursive heading with gradient decorative rules */}
+        <div className="flex items-center justify-center gap-4 mb-8">
+          <div className="flex-1 h-px bg-gradient-to-r from-transparent to-nest-300" />
+          <h2 className="font-cursive text-[1.9rem] md:text-[2.2rem] text-nest-800 px-3 leading-tight whitespace-nowrap">
+            Recent Moments
+          </h2>
+          <div className="flex-1 h-px bg-gradient-to-l from-transparent to-nest-300" />
+        </div>
+
+        <div className="flex justify-end mb-4 no-print">
           <button
             type="button"
             onClick={() => void refetchMoments()}
             disabled={momentsLoading}
-            className="text-sm text-nest-600 hover:text-nest-800 disabled:opacity-50"
+            className="text-xs text-nest-400 hover:text-nest-600 disabled:opacity-50 transition-colors"
           >
             {momentsLoading ? 'Loading…' : 'Refresh'}
           </button>
         </div>
 
         {moments.length === 0 && !momentsLoading && (
-          <p className="text-nest-500 text-sm py-8 text-center">
-            No moments yet. Add a photo above to get started.
-          </p>
+          <div className="text-center py-16">
+            <p className="text-nest-400 text-sm font-serif italic">
+              No moments yet. Add a photo above to get started.
+            </p>
+          </div>
         )}
 
         <ul className="space-y-8">
@@ -462,7 +570,7 @@ export default function AlbumPage() {
             return (
               <li
                 key={m.id}
-                className="border border-nest-200/80 rounded-xl overflow-hidden bg-white shadow-sm"
+                className="bg-[#faf8f4] rounded-2xl border border-[#e2d8c8] shadow-[0_4px_20px_rgba(90,65,40,0.09)] overflow-hidden print-card"
               >
                 {photo && (
                   <div className="relative aspect-[4/3] bg-nest-100">
@@ -476,37 +584,37 @@ export default function AlbumPage() {
                     />
                   </div>
                 )}
-                <div className="p-4">
-                  <time className="text-xs text-nest-500 font-medium">
+                <div className="p-5 md:p-6">
+                  <time className="text-xs font-medium text-nest-400 tracking-wide uppercase">
                     {format(new Date(m.recordedAt), 'MMMM d, yyyy')}
                   </time>
                   {m.vignette && (
-                    <p className="mt-2 font-serif text-nest-800 text-[15px] leading-relaxed">
+                    <p className="mt-3 font-serif text-nest-800 text-[15px] leading-relaxed">
                       {m.vignette}
                     </p>
                   )}
                   {m.transcript && (
-                    <details className="mt-2">
-                      <summary className="text-xs text-nest-400 cursor-pointer hover:text-nest-600 select-none">
+                    <details className="mt-3">
+                      <summary className="text-xs text-nest-400 cursor-pointer hover:text-nest-600 select-none transition-colors">
                         {m.vignette ? 'Show exact words' : 'Transcript'}
                       </summary>
-                      <p className="mt-1 text-xs text-nest-500 leading-relaxed">
+                      <p className="mt-1.5 text-xs text-nest-500 leading-relaxed italic">
                         {m.transcript}
                       </p>
                     </details>
                   )}
                   {!m.vignette && !m.transcript && m.audioPath && (
-                    <p className="mt-2 text-xs text-nest-500 italic">
+                    <p className="mt-3 text-xs text-nest-400 italic">
                       Voice note recorded — transcription unavailable.
                     </p>
                   )}
 
                   {/* Edit / Delete toolbar */}
-                  <div className="mt-4 flex items-center gap-3 pt-3 border-t border-nest-100">
+                  <div className="mt-5 flex items-center gap-3 pt-4 border-t border-[#ece4d8] no-print">
                     <button
                       type="button"
                       onClick={() => openEdit(m.id)}
-                      className="text-xs text-nest-500 hover:text-nest-700 font-medium"
+                      className="text-xs text-nest-500 hover:text-nest-700 font-medium transition-colors"
                     >
                       Edit
                     </button>
@@ -517,7 +625,7 @@ export default function AlbumPage() {
                           type="button"
                           disabled={deleteMutation.isPending && deleteMutation.variables === m.id}
                           onClick={() => handleDelete(m.id)}
-                          className="text-xs text-red-600 font-semibold hover:text-red-700 disabled:opacity-50"
+                          className="text-xs text-red-500 font-semibold hover:text-red-600 disabled:opacity-50 transition-colors"
                         >
                           {deleteMutation.isPending && deleteMutation.variables === m.id
                             ? 'Deleting…'
@@ -526,7 +634,7 @@ export default function AlbumPage() {
                         <button
                           type="button"
                           onClick={() => setConfirmDeleteId(null)}
-                          className="text-xs text-nest-400 hover:text-nest-600"
+                          className="text-xs text-nest-400 hover:text-nest-600 transition-colors"
                         >
                           Cancel
                         </button>
@@ -535,7 +643,7 @@ export default function AlbumPage() {
                       <button
                         type="button"
                         onClick={() => { setConfirmDeleteId(m.id); setEditingId(null); }}
-                        className="text-xs text-nest-400 hover:text-red-500 ml-auto"
+                        className="text-xs text-nest-400 hover:text-red-400 ml-auto transition-colors"
                       >
                         Delete
                       </button>
@@ -545,27 +653,37 @@ export default function AlbumPage() {
 
                 {/* ── Inline edit panel ──────────────────────────────────── */}
                 {editingId === m.id && (
-                  <div className="border-t border-nest-100 bg-nest-50/40 p-4 space-y-4">
-                    <p className="text-xs font-semibold text-nest-700 uppercase tracking-wide">
+                  <div className="border-t border-[#ece4d8] bg-[#f7f3ee]/70 p-5 space-y-4 no-print">
+                    <p className="text-xs font-semibold text-nest-600 uppercase tracking-widest">
                       Edit moment
                     </p>
 
                     {/* Edit photo */}
                     <div>
-                      <p className="text-xs font-medium text-nest-700 mb-1.5">Photo</p>
+                      <p className="text-xs font-medium text-nest-600 mb-2">Photo</p>
                       <div className="flex flex-wrap items-center gap-2">
                         {!editRemovePhoto ? (
                           <>
                             <input
                               ref={editPhotoRef}
+                              id={`edit-photo-${m.id}`}
                               type="file"
                               accept="image/*"
                               onChange={(e) => {
                                 setEditRemovePhoto(false);
                                 setEditPhotoFile(e.target.files?.[0] ?? null);
                               }}
-                              className="block text-xs text-nest-600 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:bg-nest-100 file:text-nest-800 file:text-xs"
+                              className="sr-only"
                             />
+                            <label
+                              htmlFor={`edit-photo-${m.id}`}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-nest-700 text-white text-xs rounded-full cursor-pointer hover:bg-nest-800 transition-colors shadow-sm select-none"
+                            >
+                              Replace Photo
+                            </label>
+                            {editPhotoFile && (
+                              <span className="text-xs text-nest-400 italic">{editPhotoFile.name}</span>
+                            )}
                             {(m.photos.length > 0 || m.photoPath) && (
                               <button
                                 type="button"
@@ -574,7 +692,7 @@ export default function AlbumPage() {
                                   setEditPhotoFile(null);
                                   if (editPhotoRef.current) editPhotoRef.current.value = '';
                                 }}
-                                className="text-xs text-red-400 hover:text-red-600"
+                                className="text-xs text-red-400 hover:text-red-600 transition-colors"
                               >
                                 Remove photo
                               </button>
@@ -582,11 +700,11 @@ export default function AlbumPage() {
                           </>
                         ) : (
                           <>
-                            <span className="text-xs text-red-500">Photo will be removed</span>
+                            <span className="text-xs text-red-500 italic">Photo will be removed</span>
                             <button
                               type="button"
                               onClick={() => setEditRemovePhoto(false)}
-                              className="text-xs text-nest-500 hover:text-nest-700"
+                              className="text-xs text-nest-500 hover:text-nest-700 transition-colors"
                             >
                               Undo
                             </button>
@@ -597,22 +715,29 @@ export default function AlbumPage() {
 
                     {/* Edit audio */}
                     <div>
-                      <p className="text-xs font-medium text-nest-700 mb-1.5">Voice note</p>
+                      <p className="text-xs font-medium text-nest-600 mb-2">Voice note</p>
                       {!editRemoveAudio ? (
                         <div className="flex flex-wrap items-center gap-2">
                           <input
                             ref={editAudioRef}
+                            id={`edit-audio-${m.id}`}
                             type="file"
                             accept="audio/*"
                             disabled={editIsRecording}
                             onChange={(e) => setEditAudioFile(e.target.files?.[0] ?? null)}
-                            className="block text-xs text-nest-600 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:bg-nest-100 file:text-nest-800 file:text-xs disabled:opacity-50"
+                            className="sr-only"
                           />
+                          <label
+                            htmlFor={`edit-audio-${m.id}`}
+                            className={`inline-flex items-center gap-1.5 px-3 py-1.5 bg-nest-700 text-white text-xs rounded-full cursor-pointer hover:bg-nest-800 transition-colors shadow-sm select-none${editIsRecording ? ' opacity-50 pointer-events-none' : ''}`}
+                          >
+                            Replace Audio
+                          </label>
                           {!editIsRecording ? (
                             <button
                               type="button"
                               onClick={startEditRecording}
-                              className="px-2.5 py-1.5 rounded border border-nest-300 text-nest-700 text-xs font-medium hover:bg-nest-100"
+                              className="px-3 py-1.5 text-xs text-nest-600 rounded-full border border-[#d9cfb8] bg-white/80 hover:bg-nest-50 transition-colors shadow-sm"
                             >
                               Record
                             </button>
@@ -620,7 +745,7 @@ export default function AlbumPage() {
                             <button
                               type="button"
                               onClick={stopEditRecording}
-                              className="px-2.5 py-1.5 rounded bg-red-100 text-red-800 text-xs font-medium flex items-center gap-1.5"
+                              className="px-3 py-1.5 text-xs text-red-700 rounded-full border border-red-200 bg-red-50 hover:bg-red-100 transition-colors flex items-center gap-1.5 shadow-sm"
                             >
                               <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
                               Stop
@@ -634,22 +759,22 @@ export default function AlbumPage() {
                                 setEditAudioFile(null);
                                 if (editAudioRef.current) editAudioRef.current.value = '';
                               }}
-                              className="text-xs text-red-400 hover:text-red-600"
+                              className="text-xs text-red-400 hover:text-red-600 transition-colors"
                             >
                               Remove audio
                             </button>
                           )}
                           {editAudioFile && !editIsRecording && (
-                            <span className="text-xs text-green-600">✓ New audio ready</span>
+                            <span className="text-xs text-green-600 italic">✓ New audio ready</span>
                           )}
                         </div>
                       ) : (
                         <div className="flex items-center gap-2">
-                          <span className="text-xs text-red-500">Voice note will be removed</span>
+                          <span className="text-xs text-red-500 italic">Voice note will be removed</span>
                           <button
                             type="button"
                             onClick={() => setEditRemoveAudio(false)}
-                            className="text-xs text-nest-500 hover:text-nest-700"
+                            className="text-xs text-nest-500 hover:text-nest-700 transition-colors"
                           >
                             Undo
                           </button>
@@ -658,12 +783,12 @@ export default function AlbumPage() {
                     </div>
 
                     {/* Save / Cancel */}
-                    <div className="flex items-center gap-2 pt-1">
+                    <div className="flex items-center gap-3 pt-1">
                       <button
                         type="button"
                         disabled={updateMutation.isPending}
                         onClick={() => handleUpdate(m.id)}
-                        className="px-3 py-1.5 bg-nest-700 text-white rounded text-xs font-medium hover:bg-nest-800 disabled:opacity-50 disabled:pointer-events-none"
+                        className="px-4 py-1.5 bg-nest-700 text-white rounded-full text-xs font-medium hover:bg-nest-800 disabled:opacity-50 disabled:pointer-events-none transition-all shadow-sm"
                       >
                         {updateMutation.isPending
                           ? editAudioFile
@@ -675,7 +800,7 @@ export default function AlbumPage() {
                         type="button"
                         disabled={updateMutation.isPending}
                         onClick={cancelEdit}
-                        className="text-xs text-nest-500 hover:text-nest-700 disabled:opacity-50"
+                        className="text-xs text-nest-400 hover:text-nest-600 disabled:opacity-50 transition-colors"
                       >
                         Cancel
                       </button>

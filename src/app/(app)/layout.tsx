@@ -8,11 +8,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <>
-      <header className="border-b border-nest-200/60 bg-white/80 backdrop-blur-sm sticky top-0 z-10">
+      <header className="border-b border-nest-200/50 bg-[#f5f0e6]/90 backdrop-blur-sm sticky top-0 z-10">
         <div className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
           <Link
             href="/dashboard"
-            className="font-serif text-xl font-medium text-nest-800 hover:text-nest-600 transition-colors"
+            className="font-serif text-xl font-semibold text-nest-800 hover:text-nest-700 tracking-wide transition-colors"
           >
             LifeNest
           </Link>
@@ -22,7 +22,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             </span>
             <button
               onClick={() => signOut({ callbackUrl: '/login' })}
-              className="text-sm text-nest-600 hover:text-nest-800 transition-colors"
+              className="text-sm text-nest-500 hover:text-nest-800 transition-colors"
             >
               Sign out
             </button>

@@ -33,3 +33,7 @@ yarn-error.log*
 # IDE
 .idea
 .vscode
+
+# personal notes
+RESUME_SNIPPET.md
+AI_*.md
