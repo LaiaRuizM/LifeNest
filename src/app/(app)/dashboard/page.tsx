@@ -191,10 +191,11 @@ export default function DashboardPage() {
         {albums.map((album) => (
           <li
             key={album.id}
-            className="bg-white border border-nest-200/80 rounded-xl p-5 shadow-sm"
+            onClick={() => editingId !== album.id && router.push(`/albums/${album.id}`)}
+            className="bg-white border border-nest-200/80 rounded-xl p-5 shadow-sm cursor-pointer hover:shadow-md transition-shadow"
           >
             {editingId === album.id ? (
-              <div className="flex gap-2 mb-3">
+              <div className="flex gap-2 mb-3" onClick={(e) => e.stopPropagation()}>
                 <input
                   value={editName}
                   onChange={(e) => setEditName(e.target.value)}
@@ -217,17 +218,12 @@ export default function DashboardPage() {
                 </button>
               </div>
             ) : (
-              <button
-                onClick={() => router.push(`/albums/${album.id}`)}
-                className="text-left w-full group"
-              >
-                <h2 className="font-serif text-lg font-medium text-nest-800 group-hover:text-nest-600 transition-colors">
-                  {album.name}
-                </h2>
-              </button>
+              <h2 className="font-serif text-lg font-medium text-nest-800 group-hover:text-nest-600 transition-colors">
+                {album.name}
+              </h2>
             )}
 
-            <div className="flex items-center justify-between mt-3">
+            <div className="flex items-center justify-between mt-3" onClick={(e) => e.stopPropagation()}>
               <p className="text-xs text-nest-400">
                 {album._count.moments} moment{album._count.moments !== 1 ? 's' : ''}
                 <span className="mx-1.5">·</span>
